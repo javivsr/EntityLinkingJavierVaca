@@ -1,6 +1,8 @@
 # Documents
 
-(Report in Word Format)[Entity_Linking_Report.docx]
+- [Report in Word Format](Entity_Linking_Report.docx)
+- [Report in PDF Format](Entity_Linking_Report.pdf)
+- [CPC Database](data/cpc_records.zip)
 
 # Labelling Process
 
@@ -34,3 +36,38 @@
 
 `step3(FILE_STEP2b, FILE_STEP3, FILE_LABELLING)`
 
+From this point forward, the [labelling.csv](data/labelling.csv) file is available for the manual labeling process.
+
+# Evaluation of Models
+
+`from evaluation import *`
+
+## Loading of data
+
+`df = pd.read_csv(FILE_LABELLING, sep=';', encoding='utf-8')`
+
+`X = df[COLS].to_numpy(dtype=float)`
+
+`y_true = (df["gold"] == "Yes").astype(int).to_numpy()`
+
+## Heuristics model
+
+`show_metrics(y_true, heuristics(X, y_true, UMBRAL))`
+
+## Logistic regression model
+
+`model = regression(X, y_true)`
+
+`show_metrics(y_true, model.predict(X))`
+
+## Random forest model
+
+`model = forest(X, y_true)`
+
+`show_metrics(y_true, model.predict(X))`
+
+## XG-Boost model
+
+`model = xgboost(X, y_true)`
+
+`show_metrics(y_true, model.predict(X))`
