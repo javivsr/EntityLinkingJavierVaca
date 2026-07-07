@@ -3,7 +3,7 @@
 - [Report in Word Format](Entity_Linking_Report.docx)
 - [Report in PDF Format](Entity_Linking_Report.pdf)
 - [CPC Database](data/cpc_records.zip) (in zip format due to GitHub restrictions, it must be decompressed before use)
-
+- [CPC Database in csv format](data/cpc_csv.zip) 
 # Production
 
 The [master.csv](data/production/master.csv) file contains the results of the linking between CPC records (*cpc* field, which contains the record ID) and Wikidata entities (*qid* field). It has 152,589 rows (one for each CPC record), and the *qid* field can have the following values:
