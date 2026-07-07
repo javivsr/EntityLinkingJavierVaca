@@ -270,7 +270,7 @@ SPARQL_FIELDS = [
     ('countryLabel', True)
 ]
 
-def enriquece(reg_f1, dic_cpc):
+def get_reg_wiki(reg_cpc, reg_f1):
     """
     Fetch lightweight structured details from Wikidata SPARQL.
     """
@@ -296,37 +296,36 @@ def enriquece(reg_f1, dic_cpc):
     response.raise_for_status()
     data = response.json()
     bindings = data.get("results", {}).get("bindings", [])
-    wiki = dict([(k,set()) if fl else (k,"") for (k,fl) in SPARQL_FIELDS])
-    wiki['qid'] = qid
+    reg_wiki = dict([(k,set()) if fl else (k,"") for (k,fl) in SPARQL_FIELDS])
+    reg_wiki['qid'] = qid
     if bindings:
         for row in bindings:
             for (campo, fl) in SPARQL_FIELDS:
                 if campo in row:
                     if fl:
-                        wiki[campo].add(unpack(row[campo]))
+                        reg_wiki[campo].add(unpack(row[campo]))
                     else:
-                        wiki[campo] = unpack(row[campo])
-    cpc = dic_cpc[reg_f1['cpc_id']]
+                        reg_wiki[campo] = unpack(row[campo])
     res = {}
     res['cpc'] = reg_f1['cpc_id']
     res['qid'] = reg_f1['qid']
-    res['tipo'] = wiki['itemTypeLabel']
+    res['tipo'] = reg_wiki['itemTypeLabel']
     res['nom1'] = reg_f1['query']
-    res['nom2'] = wiki['itemLabel']
-    res['nac1'] = int(cpc.get('DATA_NASCITA',['-1000'])[0])
-    res['nac2'] = parse_year(wiki.get('birthDateLabel', None))
-    res['sex1'] = cpc['SESSO'][0]
-    res['sex2'] = wiki.get('sexLabel',[""])[0:1]
-    res['pais1'] = cpc.get('NAZIONE_DI_NASCITA',[""])[0]
-    res['pais2'] = '|'.join(wiki['countryLabel'])
-    res['ciudad1'] = cpc.get('COMUNE_DI_NASCITA',[""])[0]
-    res['ciudad2'] = '|'.join(wiki['birthPlaceLabel'])
-    res['oficio1'] = '|'.join(sorted(cpc.get('MESTIERE',[])))
-    res['oficio2'] = '|'.join(sorted(wiki['occupationLabel']))
-    res['padre1'] = cpc.get('PATERNITA',[""])[0]
-    res['padre2'] = '|'.join(wiki['fatherNameLabel'])
-    res['afil1'] = '|'.join(sorted(cpc.get('COLORE',[])))
-    res['afil2'] = wiki.get('itemDescription',"")
+    res['nom2'] = reg_wiki['itemLabel']
+    res['nac1'] = int(reg_cpc.get('DATA_NASCITA',['-1000'])[0])
+    res['nac2'] = parse_year(reg_wiki.get('birthDateLabel', None))
+    res['sex1'] = reg_cpc['SESSO'][0]
+    res['sex2'] = reg_wiki.get('sexLabel',[""])[0:1]
+    res['pais1'] = reg_cpc.get('NAZIONE_DI_NASCITA',[""])[0]
+    res['pais2'] = '|'.join(reg_wiki['countryLabel'])
+    res['ciudad1'] = reg_cpc.get('COMUNE_DI_NASCITA',[""])[0]
+    res['ciudad2'] = '|'.join(reg_wiki['birthPlaceLabel'])
+    res['oficio1'] = '|'.join(sorted(reg_cpc.get('MESTIERE',[])))
+    res['oficio2'] = '|'.join(sorted(reg_wiki['occupationLabel']))
+    res['padre1'] = reg_cpc.get('PATERNITA',[""])[0]
+    res['padre2'] = '|'.join(reg_wiki['fatherNameLabel'])
+    res['afil1'] = '|'.join(sorted(reg_cpc.get('COLORE',[])))
+    res['afil2'] = reg_wiki.get('itemDescription',"")
     res['alias'] = '|'.join(reg_f1.get('aliases',[]))
     return res
 
@@ -339,7 +338,7 @@ def step2a(fich_cpc, fich_fase1, fich_fase2):
     if os.path.isfile(fich_fase2):
         df2 = pd.read_csv(fich_fase2, sep=';', encoding='utf-8')
     else:
-        df2 = pd.DataFrame(columns=['cpc','qid','tipo','nom1','nom2','nac1','nac2','sex1','sex2','pais1','pais2','ciudad1','ciudad2','oficio1','oficio2','padre1','padre2','afil1','afil2'])
+        df2 = pd.DataFrame(columns=['cpc','qid','tipo','nom1','nom2','nac1','nac2','sex1','sex2','pais1','pais2','ciudad1','ciudad2','oficio1','oficio2','padre1','padre2','afil1','afil2','alias'])
     existentes = set(df2['cpc']+df2['qid'])
     handle = display(df, display_id=True)
     try:
@@ -347,11 +346,11 @@ def step2a(fich_cpc, fich_fase1, fich_fase2):
             if reg['cpc_id']+reg['qid'] in existentes:
                 continue
             sleep(0.5)
-            df2.loc[len(df2)] = enriquece(reg, dic_cpc)
+            df2.loc[len(df2)] = get_reg_wiki(dic_cpc[reg['cpc_id']], reg)
             handle.update(df2)
     finally:
-        df2.to_csv(fich_fase2, sep=';', index=False, encoding='utf-8')
-
+        df2.to_csv(fich_fase2, sep=';', index=False, encoding='utf-8')        
+        
 def step2b(fich_fase1, fich_fase2, fich_fase3):
     df1 = pd.read_csv(fich_fase1, sep=';', encoding='utf-8')
     df2 = pd.read_csv(fich_fase2, sep=';', encoding='utf-8')
@@ -366,6 +365,9 @@ def normal(txt):
     txt = str(txt).strip().lower()
     txt = re.sub(r"\s+", " ", txt)
     return ''.join(c for c in unicodedata.normalize('NFD', txt) if unicodedata.category(c) != 'Mn')
+
+def empty(val):
+    return isinstance(val, float) or not val
 
 def eval_birth(row):
     dif = abs(row['nac1']-row['nac2'])
@@ -383,14 +385,14 @@ def eval_name(row):
     return 1 if n1 == normal(row['nom2']) or n1 == normal(row['alias']) else -1
 
 def eval_sex(row):
-    if row['sex1'] == row['sex2']:
-        return 1
-    return 0 if isinstance(row['sex1'], float) or isinstance(row['sex2'], float) else -1
+    if empty(row['sex1']) or empty(row['sex2']):
+        return 0
+    return 1 if row['sex1'] == row['sex2'] else -1
 
 EXCEP_COUNTRY = {'Yugoslavia':'Jugoslavia', 'Repubblica San Marino':'San Marino'}
 
 def eval_country(row):
-    if isinstance(row['pais1'], float) or isinstance(row['pais2'], float):
+    if empty(row['pais1']) or empty(row['pais2']):
         return 0
     if row['pais1'] in row['pais2']:
         return 1
@@ -400,7 +402,7 @@ def eval_country(row):
     return -1
 
 def eval_city(row):
-    if isinstance(row['ciudad1'], float) or isinstance(row['ciudad2'], float):
+    if empty(row['ciudad1']) or empty(row['ciudad2']):
         return 0
     # Comprobación normalizada
     if normal(row['ciudad1']) == normal(row['ciudad2']):
@@ -412,12 +414,12 @@ def eval_city(row):
     return -1
 
 def eval_city2(row):
-    if isinstance(row['ciudad1'], float) or isinstance(row['ciudad2'], float):
+    if empty(row['ciudad1']) or empty(row['ciudad2']):
         return 0
     return fuzz.partial_ratio(row['ciudad1'], row['ciudad2'])/100
 
 def eval_father(row):
-    if isinstance(row['padre1'], float) or isinstance(row['padre2'], float):
+    if empty(row['padre1']) or empty(row['padre2']):
         return 0
     # Comprobación normalizada
     n1 = normal(row['padre1'])
@@ -455,14 +457,14 @@ def extract_occupation(txt):
     return set(normal_occup(oc) for oc in txt.split('|'))
 
 def eval_occupation(row):
-    if isinstance(row['oficio1'], float) or isinstance(row['oficio2'], float):
+    if empty(row['oficio1']) or empty(row['oficio2']):
         return 0
     set_occup1 = extract_occupation(row['oficio1'])
     set_occup2 = extract_occupation(row['oficio2'])
     return 1 if len(set_occup1 & set_occup2) > 0 else -1
     
 def eval_affiliation(row):
-    if isinstance(row['afil1'], float) or isinstance(row['afil2'], float):
+    if empty(row['afil1']) or empty(row['afil2']):
         return 0
     return 1 if row['afil1'] in row['afil2'] else 0
 
@@ -513,7 +515,7 @@ def group(dat, fkey, fval):
 
 def report(fich_fase1, fich_fase3, fich_eval):
     fase1 = pd.read_csv(fich_fase1, sep=';', encoding='utf-8').to_dict('records')
-    grupos = group(fase1, lambda r: r['cpc_id'], lambda r: '' if isinstance(r['qid'], float) else r['qid'])
+    grupos = group(fase1, lambda r: r['cpc_id'], lambda r: '' if empty(r['qid']) else r['qid'])
     print("FASE 1 - BÚSQUEDA DIRECTA EN WIKIDATA")
     print(f"Número de registros CPC analizados: {len(grupos)}")
     gfind = [len(lis) for (_,lis) in grupos if lis]
@@ -574,33 +576,48 @@ def load_data(fich_master, dir_dat):
             else:
                 print(f"Conflicto: {cpc} <- {v}, {cpc} <- NIL")
     dict_to_master(dic, fich_master)
-    
-def process_cpcs(lis_cpc):
+
+CACHE = {
+    'model': None,
+    'master': None,
+    'cpc': None
+}
+
+def check_cache(cache):
+    if cache['model']:
+        return
     print("Loading data.. ", end='')
     # Cargar modelo
     with open(FILE_MODEL, 'rb') as fich:
-        model = pickle.load(fich)
+        cache['model'] = pickle.load(fich)
     # Cargar maestro
-    dic_mae = master_to_dict(FILE_MASTER)
+    cache['master'] = master_to_dict(FILE_MASTER)
     # Cargar datos de cpc
-    dat = [json.loads(lin.strip()) for lin in open(FILE_CPC_ALL, encoding='utf-8')]   
-    dic_cpc = {r['id'][0]:r for r in dat}
+    dat = (json.loads(lin.strip()) for lin in open(FILE_CPC_ALL, encoding='utf-8'))
+    cache['cpc'] = {r['id'][0]:r for r in dat}
     print("Done.")    
+    
+def process_cpcs(lis_cpc):
+    check_cache(CACHE)
+    model = CACHE['model']
+    dic_mae = CACHE['master']
+    dic_cpc = CACHE['cpc']
     surv2 = {}
+    processed = set()
     try:
         for cpc in lis_cpc:
-            reg = dic_cpc[cpc]
+            reg_cpc = dic_cpc[cpc]
             # Direct search + sparql
-            for (query, fst) in enum_query(reg):
+            for (query, fst) in enum_query(reg_cpc):
                 sleep(0.5)
-                fil = {'cpc_id': reg['id'][0], 'query': query, 'variant': 'no' if fst else 'yes'}
-                print(query+": ", end='')
+                fil = {'cpc_id': reg_cpc['id'][0], 'query': query, 'variant': 'no' if fst else 'yes'}
+                print(cpc+':'+query+": ", end='')
                 lres = []
                 surv1 = []
                 for ri in buscar(query, 'it', 20):
                     ri.update(fil)
                     lres.append(ri['qid'])
-                    surv1.append(enriquece(ri, dic_cpc))
+                    surv1.append(get_reg_wiki(reg_cpc, ri))
                 print(lres, end="")
                 # Evaluación
                 lres = []
@@ -621,14 +638,15 @@ def process_cpcs(lis_cpc):
                     else:
                         lres.append('N')
                 print(" ->",lres)
-    except:
-        print("\nServer: Bad response. Saving obtained data.")
-    # Actualizar maestro
-    for cpc in lis_cpc:
-        dic_mae[cpc] = surv2[cpc] if cpc in surv2 else 'NIL'
-    # Salvar maestro
-    dict_to_master(dic_mae, FILE_MASTER)
-    print("Master updated.")
+            processed.add(cpc)
+    finally:
+        # Actualizar maestro
+        for cpc in lis_cpc:
+            if cpc in processed:
+                dic_mae[cpc] = surv2[cpc] if cpc in surv2 else 'NIL'
+        # Salvar maestro
+        dict_to_master(dic_mae, FILE_MASTER)
+        print("Master updated.")
 
 def process_num(n):
     lis = []
@@ -638,3 +656,78 @@ def process_num(n):
             if len(lis) > n:
                 break
     process_cpcs(lis)
+    
+COL_INFO = ["Id","Name","Birth","Sex","Country","City","Occup","Father","Affil","Alias","Linked"]
+    
+def info_cpc(cpc):
+    check_cache(CACHE)
+    model = CACHE['model']
+    dic_mae = CACHE['master']
+    dic_cpc = CACHE['cpc']
+    df = pd.DataFrame(index=COL_INFO, columns=["CPC","Wikidata","Rank"])
+    for col in COL_INFO:
+        df.at[col,'Rank'] = ''
+    df.at['Id','CPC'] = cpc
+    df.at['Linked','Wikidata'] = ''
+    reg_cpc = dic_cpc[cpc]
+    df.at['Birth','CPC'] = int(reg_cpc.get('DATA_NASCITA',['-1000'])[0])
+    df.at['Sex','CPC'] = reg_cpc['SESSO'][0]
+    df.at['Country','CPC'] = reg_cpc.get('NAZIONE_DI_NASCITA',[""])[0]
+    df.at['City','CPC'] = reg_cpc.get('COMUNE_DI_NASCITA',[""])[0]
+    df.at['Occup','CPC'] = '|'.join(sorted(reg_cpc.get('MESTIERE',[])))
+    df.at['Father','CPC'] = reg_cpc.get('PATERNITA',[""])[0]
+    df.at['Affil','CPC'] = '|'.join(sorted(reg_cpc.get('COLORE',[])))
+    df.at['Alias','CPC'] = reg_cpc.get('ALIAS',[""])[0]
+    # Direct search + sparql
+    for (query, fst) in enum_query(reg_cpc):
+        sleep(0.5)
+        df.at['Name','CPC'] = query
+        fil = {'cpc_id': reg_cpc['id'][0], 'query': query, 'variant': 'no' if fst else 'yes'}
+        surv1 = []
+        for rw in buscar(query, 'it', 20):
+            rw.update(fil)
+            surv1.append(get_reg_wiki(reg_cpc, rw))
+        if not surv1:
+            for col in COL_INFO:
+                df.at[col,'Wikidata'] = ''
+            df.at['Linked','CPC'] = 'No data found.'
+            display(df)
+            print()
+        # Evaluación
+        for reg_wiki in surv1:                
+            df.at['Id','Wikidata'] = reg_wiki['qid']
+            df.at['Name','Wikidata'] = reg_wiki['nom2']
+            df.at['Birth','Wikidata'] = reg_wiki['nac2']
+            df.at['Sex','Wikidata'] = reg_wiki['sex2']
+            df.at['Country','Wikidata'] = reg_wiki['pais2']
+            df.at['City','Wikidata'] = reg_wiki['ciudad2']
+            df.at['Occup','Wikidata'] = reg_wiki['oficio2']
+            df.at['Father','Wikidata'] = reg_wiki['padre2']
+            df.at['Affil','Wikidata'] = reg_wiki['afil2']
+            df.at['Alias','Wikidata'] = reg_wiki['alias']               
+            if reg_wiki['tipo'] != 'umano':
+                df.at['Linked','CPC'] = 'Not human.'
+                display(df)
+                print()
+                continue
+            v_birth = eval_birth(reg_wiki)
+            if v_birth < 0:
+                df.at['Linked','CPC'] = 'Births dates do not match.'
+                display(df)
+                print()
+                continue
+            # Métricas
+            X = [v_birth, eval_name(reg_wiki), eval_sex(reg_wiki), eval_country(reg_wiki),
+                 eval_city2(reg_wiki), eval_father(reg_wiki), eval_occupation(reg_wiki), eval_affiliation(reg_wiki)]
+            df.at['Name','Rank'] = X[1]
+            df.at['Birth','Rank'] = X[0]
+            df.at['Sex','Rank'] = X[2]
+            df.at['Country','Rank'] = X[3]
+            df.at['City','Rank'] = X[4]
+            df.at['Occup','Rank'] = X[6]
+            df.at['Father','Rank'] = X[5]
+            df.at['Affil','Rank'] = X[7]
+            df.at['Linked','CPC'] = 'LINKED' if model.predict([X]) == 1 else 'Model says no.'
+            display(df)
+            print()
+            
