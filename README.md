@@ -6,7 +6,7 @@
 
 # Labelling Process
 
-`from labellingprocess import *`
+`from src.labellingprocess import *`
 
 ## Initial Step: Obtain the CPC (Casellario Politico Centrale) database
 
@@ -40,7 +40,7 @@ From this point forward, the [labelling.csv](data/labelling.csv) file is availab
 
 # Evaluation of Models
 
-`from evaluation import *`
+`from src.evaluation import *`
 
 ## Loading of data
 
@@ -84,7 +84,7 @@ The operations that can be performed are:
 
 The following function calls create the file and populate it with the labeling and test results (they only need to be done once)
 
-`from labellingprocess import *`
+`from src.labellingprocess import *`
 
 `create_master_file(FILE_CPC_ALL, FILE_MASTER)`
 
