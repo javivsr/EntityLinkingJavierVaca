@@ -10,6 +10,7 @@ The [master.csv](data/production/master.csv) file contains the results of the li
 * A hyphen (-) if it has not been processed
 * The text NIL if it could not be linked to any entity
 * The QID of the entity if it could be linked to that entity
+
 The operations that can be performed are:
 
 ## Creation and population of master file
