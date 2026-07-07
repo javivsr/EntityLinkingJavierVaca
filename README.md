@@ -9,7 +9,7 @@
 The [master.csv](data/production/master.csv) file contains the results of the linking between CPC records (*cpc* field, which contains the record ID) and Wikidata entities (*qid* field). It has 152,589 rows (one for each CPC record), and the *qid* field can have the following values:
 - A hyphen (-) if it has not been processed
 - The text NIL if it could not be linked to any entity
-- The QID of the entity if it could be linked to that entity
+- The QID descriptor if it could be linked to that entity
 
 The operations that can be performed are:
 
