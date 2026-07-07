@@ -4,6 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import re
 import os
+import pickle
+import unicodedata
 from rapidfuzz import fuzz
 from time import sleep
 from pathlib import Path
@@ -20,6 +22,8 @@ FILE_STEP2a = "data/labelling/step2a.csv"
 FILE_STEP2b = "data/labelling/step2b.csv"
 FILE_STEP3 = "data/labelling/step3.csv"
 FILE_LABELLING = "data/labelling/labelling.csv"
+FILE_MASTER = "data/production/master.csv"
+FILE_MODEL = "data/production/model.pkl"
 
 CPC_DATABASE_URL = "http://dati.acs.beniculturali.it/solr.CPC/select"
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
@@ -323,6 +327,7 @@ def enriquece(reg_f1, dic_cpc):
     res['padre2'] = '|'.join(wiki['fatherNameLabel'])
     res['afil1'] = '|'.join(sorted(cpc.get('COLORE',[])))
     res['afil2'] = wiki.get('itemDescription',"")
+    res['alias'] = '|'.join(reg_f1.get('aliases',[]))
     return res
 
 def step2a(fich_cpc, fich_fase1, fich_fase2):
@@ -363,60 +368,60 @@ def normal(txt):
     return ''.join(c for c in unicodedata.normalize('NFD', txt) if unicodedata.category(c) != 'Mn')
 
 def eval_birth(row):
-    dif = abs(row.nac1-row.nac2)
+    dif = abs(row['nac1']-row['nac2'])
     return -1 if dif > 1 else 1-dif
 
 def eval_name(row):
     # Comprobación rápida (cierta en la mayoría de los casos)
-    if row.nom1 == row.nom2 or row.nom1 == row.alias:
+    if row['nom1'] == row['nom2'] or row['nom1'] == row['alias']:
         return 1
     # Caso especial en que el nombre de la entrada contiene un segundo cognome
-    if row.nom2.startswith(row.nom1) and row.nom2[len(row.nom1)] == ' ':
+    if row['nom2'].startswith(row['nom1']) and row['nom2'][len(row['nom1'])] == ' ':
         return 1
     # Normalizamos y quitamos acentos    
-    n1 = normal(row.nom1)
-    return 1 if n1 == normal(row.nom2) or n1 == normal(row.alias) else -1
+    n1 = normal(row['nom1'])
+    return 1 if n1 == normal(row['nom2']) or n1 == normal(row['alias']) else -1
 
 def eval_sex(row):
-    if row.sex1 == row.sex2:
+    if row['sex1'] == row['sex2']:
         return 1
-    return 0 if isinstance(row.sex1, float) or isinstance(row.sex2, float) else -1
+    return 0 if isinstance(row['sex1'], float) or isinstance(row['sex2'], float) else -1
 
 EXCEP_COUNTRY = {'Yugoslavia':'Jugoslavia', 'Repubblica San Marino':'San Marino'}
 
 def eval_country(row):
-    if isinstance(row.pais1, float) or isinstance(row.pais2, float):
+    if isinstance(row['pais1'], float) or isinstance(row['pais2'], float):
         return 0
-    if row.pais1 in row.pais2:
+    if row['pais1'] in row['pais2']:
         return 1
     # Excepciones
-    if row.pais1 in EXCEP_COUNTRY and EXCEP_COUNTRY[row.pais1] in row.pais2:
+    if row['pais1'] in EXCEP_COUNTRY and EXCEP_COUNTRY[row['pais1']] in row['pais2']:
         return 1
     return -1
 
 def eval_city(row):
-    if isinstance(row.ciudad1, float) or isinstance(row.ciudad2, float):
+    if isinstance(row['ciudad1'], float) or isinstance(row['ciudad2'], float):
         return 0
     # Comprobación normalizada
-    if normal(row.ciudad1) == normal(row.ciudad2):
+    if normal(row['ciudad1']) == normal(row['ciudad2']):
         return 1
     # Caso especial en que la ciudad de la entrada contiene información extra
-    if row.ciudad2.startswith(row.ciudad1) and row.ciudad2[len(row.ciudad1)] == ' ':
+    if row['ciudad2'].startswith(row['ciudad1']) and row['ciudad2'][len(row['ciudad1'])] == ' ':
         return 1
     # Caso
     return -1
 
 def eval_city2(row):
-    if isinstance(row.ciudad1, float) or isinstance(row.ciudad2, float):
+    if isinstance(row['ciudad1'], float) or isinstance(row['ciudad2'], float):
         return 0
-    return fuzz.partial_ratio(row.ciudad1, row.ciudad2)/100
+    return fuzz.partial_ratio(row['ciudad1'], row['ciudad2'])/100
 
 def eval_father(row):
-    if isinstance(row.padre1, float) or isinstance(row.padre2, float):
+    if isinstance(row['padre1'], float) or isinstance(row['padre2'], float):
         return 0
     # Comprobación normalizada
-    n1 = normal(row.padre1)
-    n2 = normal(row.padre2)
+    n1 = normal(row['padre1'])
+    n2 = normal(row['padre2'])
     return 1 if n1 == n2 or n1 in n2 or n2 in n1 else -1
 
 EQUIV_OCCUP = {
@@ -450,16 +455,16 @@ def extract_occupation(txt):
     return set(normal_occup(oc) for oc in txt.split('|'))
 
 def eval_occupation(row):
-    if isinstance(row.oficio1, float) or isinstance(row.oficio2, float):
+    if isinstance(row['oficio1'], float) or isinstance(row['oficio2'], float):
         return 0
-    set_occup1 = extract_occupation(row.oficio1)
-    set_occup2 = extract_occupation(row.oficio2)
+    set_occup1 = extract_occupation(row['oficio1'])
+    set_occup2 = extract_occupation(row['oficio2'])
     return 1 if len(set_occup1 & set_occup2) > 0 else -1
     
 def eval_affiliation(row):
-    if isinstance(row.afil1, float) or isinstance(row.afil2, float):
+    if isinstance(row['afil1'], float) or isinstance(row['afil2'], float):
         return 0
-    return 1 if row.afil1 in row.afil2 else 0
+    return 1 if row['afil1'] in row['afil2'] else 0
 
 def step3(fich_fase3, fich_fase4, fich_eval):
     df3 = pd.read_csv(fich_fase3, sep=';', encoding='utf-8')
@@ -532,3 +537,104 @@ def report(fich_fase1, fich_fase3, fich_eval):
             if len(ls) > 1:
                 print(f"Varias entradas {ls} asignadas al mismo cpc: {cpc}")
 
+def create_master_file(fich_cpc, fich_master):
+    dat = [json.loads(lin.strip()) for lin in open(fich_cpc, encoding='utf-8')]
+    df = pd.DataFrame(columns=["cpc","qid"])
+    df['cpc'] = [r['id'][0] for r in dat]
+    df['qid'] = "-"
+    df.to_csv(fich_master, sep=';', index=False, encoding='utf-8')
+
+def master_to_dict(fich_master):
+    return {r['cpc']:r['qid'] for r in pd.read_csv(fich_master, sep=';', encoding='utf-8').to_dict('records')}
+
+def dict_to_master(dic, fich_master):
+    df = pd.DataFrame([{'cpc':k, 'qid':v} for k,v in dic.items()])
+    df.to_csv(fich_master, sep=';', index=False, encoding='utf-8')
+    
+def load_data(fich_master, dir_dat):
+    dic = master_to_dict(fich_master)
+    dat1 = [json.loads(lin.strip()) for lin in open(dir_dat+"/cpc_extract.jsonl", encoding='utf-8')]
+    for reg in dat1:
+        cpc = reg['id'][0] 
+        v = dic[cpc]
+        if v == '-':
+            dic[cpc] = 'NIL'
+    dat2 = pd.read_csv(dir_dat+"/labelling.csv", sep=';', encoding='utf-8').to_dict('records')
+    for reg in dat2:
+        cpc = reg['cpc']
+        v = dic[cpc]       
+        if reg['gold'] == 'Yes':
+            if v == '-' or v == 'NIL' or v == reg['qid']:
+                dic[cpc] = reg['qid']
+            else:
+                print(f"Conflicto: {cpc} <- {v}, {cpc} <- {reg['qid']}")
+        else:
+            if v == '-' or v == 'NIL':
+                dic[cpc] = 'NIL'
+            else:
+                print(f"Conflicto: {cpc} <- {v}, {cpc} <- NIL")
+    dict_to_master(dic, fich_master)
+    
+def process_cpcs(lis_cpc):
+    print("Loading data.. ", end='')
+    # Cargar modelo
+    with open(FILE_MODEL, 'rb') as fich:
+        model = pickle.load(fich)
+    # Cargar maestro
+    dic_mae = master_to_dict(FILE_MASTER)
+    # Cargar datos de cpc
+    dat = [json.loads(lin.strip()) for lin in open(FILE_CPC_ALL, encoding='utf-8')]   
+    dic_cpc = {r['id'][0]:r for r in dat}
+    print("Done.")    
+    surv2 = {}
+    try:
+        for cpc in lis_cpc:
+            reg = dic_cpc[cpc]
+            # Direct search + sparql
+            for (query, fst) in enum_query(reg):
+                sleep(0.5)
+                fil = {'cpc_id': reg['id'][0], 'query': query, 'variant': 'no' if fst else 'yes'}
+                print(query+": ", end='')
+                lres = []
+                surv1 = []
+                for ri in buscar(query, 'it', 20):
+                    ri.update(fil)
+                    lres.append(ri['qid'])
+                    surv1.append(enriquece(ri, dic_cpc))
+                print(lres, end="")
+                # Evaluación
+                lres = []
+                for reg in surv1:
+                    if reg['tipo'] != 'umano':
+                        lres.append('*')
+                        continue
+                    v_birth = eval_birth(reg)
+                    if v_birth < 0:
+                        lres.append('^')
+                        continue
+                    # Métricas
+                    X = [v_birth, eval_name(reg), eval_sex(reg), eval_country(reg), eval_city2(reg), eval_father(reg),
+                         eval_occupation(reg), eval_affiliation(reg)]
+                    if model.predict([X]) == 1:
+                        surv2[reg['cpc']] =  reg['qid']
+                        lres.append('Y')
+                    else:
+                        lres.append('N')
+                print(" ->",lres)
+    except:
+        print("\nServer: Bad response. Saving obtained data.")
+    # Actualizar maestro
+    for cpc in lis_cpc:
+        dic_mae[cpc] = surv2[cpc] if cpc in surv2 else 'NIL'
+    # Salvar maestro
+    dict_to_master(dic_mae, FILE_MASTER)
+    print("Master updated.")
+
+def process_num(n):
+    lis = []
+    for r in pd.read_csv(FILE_MASTER, sep=';', encoding='utf-8').to_dict('records'):
+        if r['qid'] == '-':
+            lis.append(r['cpc'])
+            if len(lis) > n:
+                break
+    process_cpcs(lis)
