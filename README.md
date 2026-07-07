@@ -49,6 +49,10 @@ Detailed information about the linking process can be obtained using the followi
     Country  Yugoslavia  Regno di Jugoslavia         1
     City        Dobrova      Srednja Dobrava  0.857143
     Occup     casalinga           partigiano        -1
+    Father    Stanislao                              0
+    Affil     comunista                              0
+    Alias
+    Linked       LINKED
 
 # Labelling Process
 
