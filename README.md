@@ -2,7 +2,7 @@
 
 - [Report in Word Format](Entity_Linking_Report.docx)
 - [Report in PDF Format](Entity_Linking_Report.pdf)
-- [CPC Database](data/cpc_records.zip)
+- [CPC Database](data/cpc_records.zip) (in zip format due to GitHub restrictions, it must be decompressed before use)
 
 # Production
 
