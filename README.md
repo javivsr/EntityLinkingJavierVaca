@@ -103,3 +103,20 @@ This can be done in two ways:
 `process_num(100)`
 
 In both cases, the information in the [master.csv](data/production/master.csv) file is automatically updated.
+
+Detailed information about the linking process can be obtained using the following function:
+
+`info_cpc('Z00225')`
+
+                    CPC             Wikidata      Rank
+    Id           Z00225            Q12797219
+    Name     Nada Zagar           Nada Žagar         1
+    Birth          1924                 1924         1
+    Sex               f                    f         1
+    Country  Yugoslavia  Regno di Jugoslavia         1
+    City        Dobrova      Srednja Dobrava  0.857143
+    Occup     casalinga           partigiano        -1
+    Father    Stanislao                              0
+    Affil     comunista                              0
+    Alias
+    Linked       LINKED
