@@ -71,3 +71,35 @@ From this point forward, the [labelling.csv](data/labelling.csv) file is availab
 `model = xgboost(X, y_true)`
 
 `show_metrics(y_true, model.predict(X))`
+
+# Production
+
+The [master.csv](data/production/master.csv) file contains the results of the linking between CPC records (*cpc* field, which contains the record ID) and Wikidata entities (*qid* field). It has 152,589 rows (one for each CPC record), and the *qid* field can have the following values:
+* A hyphen (-) if it has not been processed
+* The text NIL if it could not be linked to any entity
+* The QID of the entity if it could be linked to that entity
+The operations that can be performed are:
+
+## Creation and population of master file
+
+The following function calls create the file and populate it with the labeling and test results (they only need to be done once)
+
+`from labellingprocess import *`
+
+`create_master_file(FILE_CPC_ALL, FILE_MASTER)`
+
+`load_data(FILE_MASTER, 'data/labelling')`
+
+`load_data(FILE_MASTER, 'data/labelling')`
+
+## Processing of registers of CPC
+
+This can be done in two ways:
+- By providing a list of the ID fields of the CPC records to be processed.
+- By requesting that the first n records of the master file that have not yet been processed be processed.
+
+`process_cpcs(['D02945', 'K00623'])`
+
+`process_num(100)`
+
+In both cases, the information in the [master.csv](data/production/master.csv) file is automatically updated.
