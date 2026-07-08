@@ -12,6 +12,8 @@ from pathlib import Path
 from random import random
 from math import isnan
 from collections import Counter
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
 from IPython.display import display
 
 PROGRESS_CPC = "data/cpc_progress.json"
@@ -24,6 +26,8 @@ FILE_STEP3 = "data/labelling/step3.csv"
 FILE_LABELLING = "data/labelling/labelling.csv"
 FILE_MASTER = "data/production/master.csv"
 FILE_MODEL = "data/production/model.pkl"
+FILE_MODEL_X = "data/production/x.txt"
+FILE_MODEL_Y = "data/production/y.txt"
 
 CPC_DATABASE_URL = "http://dati.acs.beniculturali.it/solr.CPC/select"
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
@@ -588,8 +592,12 @@ def check_cache(cache):
         return
     print("Loading data.. ", end='')
     # Cargar modelo
-    with open(FILE_MODEL, 'rb') as fich:
-        cache['model'] = pickle.load(fich)
+    X = np.loadtxt("data/production/x.txt")
+    y_true = np.loadtxt("data/production/y_true.txt")
+    model = GradientBoostingClassifier(n_estimators=100, max_depth=3, random_state=42)
+    model.fit(X, y_true)   
+    # with open(FILE_MODEL, 'rb') as fich:
+    #     cache['model'] = pickle.load(fich)
     # Cargar maestro
     cache['master'] = master_to_dict(FILE_MASTER)
     # Cargar datos de cpc
@@ -678,6 +686,8 @@ def info_cpc(cpc):
     df.at['Father','CPC'] = reg_cpc.get('PATERNITA',[""])[0]
     df.at['Affil','CPC'] = '|'.join(sorted(reg_cpc.get('COLORE',[])))
     df.at['Alias','CPC'] = reg_cpc.get('ALIAS',[""])[0]
+    print(reg_cpc.get('ANNOTAZIONI',[""])[0])
+    print()
     # Direct search + sparql
     for (query, fst) in enum_query(reg_cpc):
         sleep(0.5)
